@@ -1,0 +1,57 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Users collection
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null; // Allow reading other users for seller info
+    }
+    
+    // Products collection
+    match /products/{productId} {
+      allow read: if true; // Anyone can read products
+      allow create: if request.auth != null 
+        && request.auth.uid == resource.data.sellerId
+        && validateProductData();
+      allow update: if request.auth != null 
+        && request.auth.uid == resource.data.sellerId
+        && validateProductData();
+      allow delete: if request.auth != null 
+        && request.auth.uid == resource.data.sellerId;
+    }
+    
+    // Purchases collection
+    match /purchases/{purchaseId} {
+      allow read: if request.auth != null 
+        && (request.auth.uid == resource.data.buyerId 
+            || request.auth.uid == resource.data.sellerId);
+      allow create: if request.auth != null 
+        && request.auth.uid == resource.data.buyerId
+        && validatePurchaseData();
+    }
+    
+    // Validation functions
+    function validateProductData() {
+      return request.resource.data.keys().hasAll(['title', 'description', 'category', 'price', 'sellerId', 'sellerUsername', 'isAvailable'])
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.description is string
+        && request.resource.data.description.size() > 0
+        && request.resource.data.category is string
+        && request.resource.data.price is number
+        && request.resource.data.price > 0
+        && request.resource.data.sellerId is string
+        && request.resource.data.sellerUsername is string
+        && request.resource.data.isAvailable is bool;
+    }
+    
+    function validatePurchaseData() {
+      return request.resource.data.keys().hasAll(['buyerId', 'sellerId', 'product', 'totalAmount'])
+        && request.resource.data.buyerId is string
+        && request.resource.data.sellerId is string
+        && request.resource.data.product is map
+        && request.resource.data.totalAmount is number
+        && request.resource.data.totalAmount > 0;
+    }
+  }
+}
